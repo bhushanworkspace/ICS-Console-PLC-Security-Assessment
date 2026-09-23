@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICS Console</title>
+<style>
+  :root{
+    --bg:#0d1217; --panel:#161f28; --panel-2:#1c2a36; --line:#2a3a47;
+    --ink:#dbe7ee; --mute:#7d93a3; --cyan:#37d6c2; --cyan-dim:#1c6f67;
+    --high:#ff5a5a; --med:#f5a623; --info:#5aa9ff; --ok:#37d6c2;
+    --tx:#f5a623; --rx:#37d6c2;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    background-image:linear-gradient(rgba(55,214,194,.025) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(55,214,194,.025) 1px,transparent 1px);
+    background-size:26px 26px}
+  .wrap{max-width:1160px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;align-items:center;gap:13px;padding:4px 0 16px;border-bottom:1px solid var(--line)}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.22em;text-transform:uppercase;font-size:15px}
+  .brand b{color:var(--cyan)}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.14em;text-transform:uppercase}
+  .lamp{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;
+        background:var(--ok);box-shadow:0 0 8px 1px var(--ok)}
+  .lamp.high{background:var(--high);box-shadow:0 0 9px 1px var(--high)}
+  .lamp.med{background:var(--med);box-shadow:0 0 9px 1px var(--med)}
+  .lamp.info{background:var(--info);box-shadow:0 0 9px 1px var(--info)}
+  .lamp.off{background:#2c3a45;box-shadow:none}
+
+  .banner{display:none;background:rgba(255,90,90,.1);border:1px solid var(--high);color:#ffd2d2;
+    font-family:var(--mono);font-size:12px;padding:10px 13px;border-radius:6px;margin:14px 0;line-height:1.5}
+
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:16px 0 6px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+  input[type=text]{background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    font-family:var(--mono);font-size:14px;padding:11px 12px;border-radius:6px;min-width:260px}
+  input[type=text]:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 2px rgba(55,214,194,.15)}
+  .toggle{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--mute);
+    background:var(--panel);border:1px solid var(--line);padding:11px 12px;border-radius:6px;cursor:pointer;user-select:none}
+  .toggle input{accent-color:var(--cyan)}
+  button.run{background:var(--cyan);color:#04201d;border:none;font-family:var(--mono);font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;padding:12px 20px;border-radius:6px;cursor:pointer;font-size:13px}
+  button.run:disabled{background:var(--cyan-dim);color:#0a3d39;cursor:wait}
+  button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;letter-spacing:.08em;padding:12px 14px;border-radius:6px;cursor:pointer}
+  button.ghost:hover{color:var(--ink);border-color:var(--cyan)}
+
+  .sweep{height:4px;background:var(--panel);border-radius:3px;overflow:hidden;margin:10px 0 4px}
+  .sweep > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));transition:width .2s}
+  .status{font-family:var(--mono);font-size:11px;color:var(--mute);letter-spacing:.06em;min-height:16px}
+
+  /* tabs */
+  .tabs{display:flex;gap:2px;margin:18px 0 14px;border-bottom:1px solid var(--line)}
+  .tab{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);
+    padding:11px 16px;cursor:pointer;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none}
+  .tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+  .tab .cnt{color:var(--mute);font-size:10px;margin-left:6px}
+  .view{display:none}
+  .view.active{display:block}
+
+  /* stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;position:relative;overflow:hidden}
+  .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cyan-dim)}
+  .stat.high::before{background:var(--high)}
+  .stat .v{font-family:var(--mono);font-size:30px;font-weight:700;line-height:1}
+  .stat.high .v{color:var(--high)}
+  .stat .k{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-top:7px}
+  @media(max-width:780px){.stats{grid-template-columns:1fr 1fr}}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .card h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);
+    margin:0;padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .card .body{padding:14px 16px}
+
+  .bar{display:flex;align-items:center;gap:10px;margin:9px 0;font-family:var(--mono);font-size:12px}
+  .bar .name{width:108px;flex:0 0 auto}
+  .bar .track{flex:1;height:10px;background:var(--panel-2);border-radius:5px;overflow:hidden}
+  .bar .track > i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));width:0;transition:width .4s}
+  .bar .n{width:26px;text-align:right;color:var(--mute)}
+
+  .ann{display:flex;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+  .ann:last-child{border-bottom:none}
+  .ann .meta{font-family:var(--mono);font-size:12px}
+  .ann .meta .top b{color:var(--cyan)}
+  .ann .meta .iss{color:var(--mute);margin-top:3px;line-height:1.45}
+  .ann .meta .fix{color:var(--med);margin-top:4px;line-height:1.45}
+  .ann .meta .adv{color:var(--info);margin-top:3px;line-height:1.45;font-size:11px}
+  .sevtag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:2px 7px;border-radius:4px;margin-left:6px}
+  .sevtag.HIGH{background:rgba(255,90,90,.13);color:var(--high)}
+  .sevtag.MEDIUM{background:rgba(245,166,35,.13);color:var(--med)}
+  .sevtag.INFO{background:rgba(90,169,255,.13);color:var(--info)}
+
+  .host{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:12px;overflow:hidden}
+  .host .hh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .host .ip{font-family:var(--mono);font-size:15px;font-weight:700}
+  .host .svc{display:flex;gap:12px;padding:9px 16px;font-family:var(--mono);font-size:12px;border-bottom:1px solid var(--panel-2)}
+  .host .svc:last-child{border-bottom:none}
+  .host .port{color:var(--cyan);width:60px;flex:0 0 auto}
+  .host .proto{width:102px;flex:0 0 auto}
+  .host .desc{color:var(--mute);line-height:1.45}
+  .host .ident{color:var(--ok);margin-top:3px;font-size:11px}
+
+  /* packets - wireshark style */
+  .pkttable{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  .pkttable th{position:sticky;top:0;background:var(--panel-2);color:var(--mute);text-align:left;
+    font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:10px;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .pkttable td{padding:6px 10px;border-bottom:1px solid var(--panel-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pkttable tr{cursor:pointer}
+  .pkttable tr.sel td{background:rgba(55,214,194,.1)}
+  .pkttable tr:hover td{background:rgba(55,214,194,.05)}
+  .dir-TX{color:var(--tx)} .dir-RX{color:var(--rx)}
+  .pl-wrap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+  .col-info{max-width:340px}
+
+  .inspect{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  @media(max-width:880px){.inspect{grid-template-columns:1fr}}
+  .tree .row{display:flex;font-family:var(--mono);font-size:12px;padding:5px 16px;border-bottom:1px solid var(--panel-2)}
+  .tree .row .fname{color:var(--mute);width:150px;flex:0 0 auto}
+  .tree .row .fval{color:var(--ink);word-break:break-all}
+  .hexpane{padding:12px 16px;font-family:var(--mono);font-size:12px;line-height:1.7;overflow:auto;max-height:300px}
+  .hexrow{display:flex;gap:14px;white-space:pre}
+  .hexrow .off{color:var(--cyan-dim)} .hexrow .hx{color:var(--ink)} .hexrow .as{color:var(--mute)}
+
+  /* diagnostics console */
+  .console{font-family:var(--mono);font-size:12px;background:#0a0f13;border:1px solid var(--line);border-radius:8px;
+    padding:12px 14px;max-height:480px;overflow:auto;line-height:1.7}
+  .ev{display:flex;gap:10px}
+  .ev .lv{width:54px;flex:0 0 auto;text-transform:uppercase;font-size:10px;letter-spacing:.08em;padding-top:1px}
+  .lv.ok{color:var(--ok)} .lv.warn{color:var(--med)} .lv.info{color:var(--mute)} .lv.error{color:var(--high)}
+  .ev .msg{color:var(--ink)}
+
+  .empty{font-family:var(--mono);font-size:12px;color:var(--mute);padding:22px 16px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="lamp" id="powerLamp"></span>
+    <div>
+      <div class="brand"><b>ICS</b> CONSOLE</div>
+      <div class="tag">OT / PLC assessment &middot; packet inspector</div>
+    </div>
+  </header>
+
+  <div class="banner" id="offline">Backend not detected. This page is the interface only &mdash;
+    start the engine with <b>python3 ics_console.py</b> and open the URL it prints. Scanning needs
+    the local Python server (browsers can't open raw sockets).</div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="target">Target &mdash; IP, CIDR, or comma list</label>
+      <input type="text" id="target" placeholder="192.168.1.0/24">
+    </div>
+    <label class="toggle"><input type="checkbox" id="gentle" checked> Gentle (live OT)</label>
+    <button class="run" id="runBtn">Start scan</button>
+    <button class="ghost" id="exportBtn" disabled>Export JSON</button>
+  </div>
+  <div class="sweep"><i id="sweep"></i></div>
+  <div class="status" id="status">Idle. Enter a target and start a scan.</div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="dash">Dashboard</button>
+    <button class="tab" data-view="pkts">Packets<span class="cnt" id="pktCnt">0</span></button>
+    <button class="tab" data-view="diag">Diagnostics<span class="cnt" id="evCnt">0</span></button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="view active" id="view-dash">
+    <div class="stats">
+      <div class="stat"><div class="v" id="s_hosts">0</div><div class="k">Hosts scanned</div></div>
+      <div class="stat"><div class="v" id="s_ics">0</div><div class="k">ICS devices</div></div>
+      <div class="stat"><div class="v" id="s_find">0</div><div class="k">Findings</div></div>
+      <div class="stat high"><div class="v" id="s_high">0</div><div class="k">High severity</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2><span class="lamp off" id="protLamp"></span>Protocol exposure</h2>
+        <div class="body" id="protBars"><div class="empty">No data yet.</div></div>
+      </div>
+      <div class="card">
+        <h2><span class="lamp off" id="annLamp"></span>Vulnerability annunciator</h2>
+        <div id="annList"><div class="empty">No findings yet.</div></div>
+      </div>
+    </div>
+    <div style="margin-top:14px" id="hosts"><div class="empty">Run a scan to discover PLCs on the segment.</div></div>
+  </div>
+
+  <!-- PACKETS -->
+  <div class="view" id="view-pkts">
+    <div class="pl-wrap">
+      <table class="pkttable">
+        <thead><tr><th style="width:42px">No.</th><th style="width:84px">Time</th>
+          <th style="width:118px">Source</th><th style="width:118px">Dest</th>
+          <th style="width:96px">Proto</th><th style="width:50px">Len</th><th class="col-info">Info</th></tr></thead>
+        <tbody id="pktBody"></tbody>
+      </table>
+    </div>
+    <div id="pktEmpty" class="empty">No probe packets captured yet. Findable services (Modbus, EtherNet/IP, S7)
+      produce a request/response exchange you can inspect here.</div>
+    <div class="inspect" id="inspect" style="display:none">
+      <div class="card"><h2>Packet detail</h2><div class="tree" id="tree"></div></div>
+      <div class="card"><h2>Bytes (hex / ascii)</h2><div class="hexpane" id="hex"></div></div>
+    </div>
+  </div>
+
+  <!-- DIAGNOSTICS -->
+  <div class="view" id="view-diag">
+    <div class="console" id="console"><div class="empty">Scan events and errors will stream here.</div></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let results=[], findings=[], packets=[], events=[], protoCounts={};
+let stats={hosts:0,ics:0,find:0,high:0}, t0=null, selRow=null;
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); $('view-'+t.dataset.view).classList.add('active');
+}));
+
+function reset(){
+  results=[];findings=[];packets=[];events=[];protoCounts={};
+  stats={hosts:0,ics:0,find:0,high:0};t0=null;selRow=null;
+  ['s_hosts','s_ics','s_find','s_high'].forEach(i=>$(i).textContent='0');
+  $('protBars').innerHTML='<div class="empty">Scanning&hellip;</div>';
+  $('annList').innerHTML='<div class="empty">Scanning&hellip;</div>';
+  $('hosts').innerHTML='<div class="empty">Scanning&hellip;</div>';
+  $('pktBody').innerHTML='';$('pktCnt').textContent='0';$('pktEmpty').style.display='';
+  $('inspect').style.display='none';
+  $('console').innerHTML='';$('evCnt').textContent='0';
+  ['protLamp','annLamp'].forEach(l=>$(l).className='lamp off');
+}
+
+function renderStats(){
+  $('s_hosts').textContent=stats.hosts;$('s_ics').textContent=stats.ics;
+  $('s_find').textContent=stats.find;$('s_high').textContent=stats.high;
+}
+function renderProtocols(){
+  const k=Object.keys(protoCounts);
+  if(!k.length){$('protBars').innerHTML='<div class="empty">No ICS services seen.</div>';return;}
+  const max=Math.max(...k.map(x=>protoCounts[x]));k.sort((a,b)=>protoCounts[b]-protoCounts[a]);
+  $('protBars').innerHTML=k.map(x=>`<div class="bar"><span class="name">${esc(x)}</span>
+    <span class="track"><i style="width:${(protoCounts[x]/max*100).toFixed(0)}%"></i></span>
+    <span class="n">${protoCounts[x]}</span></div>`).join('');
+  $('protLamp').className='lamp';
+}
+function renderFindings(){
+  if(!findings.length){$('annList').innerHTML='<div class="empty">No findings.</div>';return;}
+  const order={HIGH:0,MEDIUM:1,INFO:2};
+  const sorted=[...findings].sort((a,b)=>order[a.severity]-order[b.severity]);
+  $('annList').innerHTML=sorted.map(f=>{
+    const lamp=f.severity==='HIGH'?'high':f.severity==='MEDIUM'?'med':'info';
+    const adv=f.advisory?`<div class="adv">Refs &mdash; ${esc(f.advisory)}</div>`:'';
+    return `<div class="ann"><span class="lamp ${lamp}"></span><div class="meta">
+      <div class="top"><b>${esc(f.host)}</b>:${f.port} &middot; ${esc(f.protocol)}
+        <span class="sevtag ${f.severity}">${f.severity}</span></div>
+      <div class="iss">${esc(f.issue)}</div>
+      <div class="fix">Fix &mdash; ${esc(f.guidance)}</div>${adv}</div></div>`;
+  }).join('');
+  $('annLamp').className='lamp '+(stats.high?'high':'med');
+}
+function renderHosts(){
+  const live=results.filter(r=>r.open_ports.length);
+  if(!live.length){$('hosts').innerHTML='<div class="empty">No ICS devices responded on the scanned ports.</div>';return;}
+  $('hosts').innerHTML=live.map(r=>{
+    const hasHigh=r.findings.some(f=>f.severity==='HIGH');
+    const lamp=hasHigh?'high':(r.findings.some(f=>f.severity==='MEDIUM')?'med':'info');
+    const svcs=r.services.map(s=>{
+      let id='';if(s.identity){id='<div class="ident">&rsaquo; '+
+        Object.entries(s.identity).map(([k,v])=>`${esc(k)}=${esc(v)}`).join(', ')+'</div>';}
+      return `<div class="svc"><span class="port">${s.port}</span>
+        <span class="proto">${esc(s.protocol)}</span>
+        <span class="desc">${esc(s.note)}${id}</span></div>`;}).join('');
+    return `<div class="host"><div class="hh"><span class="lamp ${lamp}"></span>
+      <span class="ip">${esc(r.host)}</span></div>${svcs}</div>`;}).join('');
+}
+
+function renderPackets(){
+  $('pktCnt').textContent=packets.length;
+  if(!packets.length)return;
+  $('pktEmpty').style.display='none';
+  $('pktBody').innerHTML=packets.map((p,i)=>{
+    const rel=t0!=null?(p.t-t0).toFixed(3):'0.000';
+    return `<tr data-i="${i}"><td>${i+1}</td><td>${rel}</td>
+      <td class="dir-${p.dir}">${esc(p.src)}</td><td>${esc(p.dst)}</td>
+      <td>${esc(p.proto)}</td><td>${p.length}</td>
+      <td class="col-info" title="${esc(p.info)}">${esc(p.info)}</td></tr>`;}).join('');
+  $('pktBody').querySelectorAll('tr').forEach(tr=>tr.addEventListener('click',()=>selectPacket(+tr.dataset.i,tr)));
+}
+function hexRows(hex){
+  const b=hex.trim()?hex.trim().split(' '):[];let out='';
+  for(let i=0;i<b.length;i+=16){
+    const slice=b.slice(i,i+16);
+    const hx=slice.join(' ').padEnd(16*3-1,' ');
+    const as=slice.map(h=>{const n=parseInt(h,16);return n>=32&&n<127?String.fromCharCode(n):'.';}).join('');
+    out+=`<div class="hexrow"><span class="off">${i.toString(16).padStart(4,'0')}</span>`+
+         `<span class="hx">${esc(hx)}</span><span class="as">${esc(as)}</span></div>`;}
+  return out||'<div class="empty">No bytes.</div>';
+}
+function selectPacket(i,tr){
+  $('pktBody').querySelectorAll('tr').forEach(x=>x.classList.remove('sel'));
+  tr.classList.add('sel');
+  const p=packets[i];
+  $('inspect').style.display='';
+  const head=[['Direction',p.dir],['Source',p.src],['Destination',p.dst],
+    ['Protocol',p.proto],['Length',p.length+' bytes'],['Info',p.info]];
+  const rows=head.concat(p.fields||[]);
+  $('tree').innerHTML=rows.map(([n,v])=>`<div class="row"><span class="fname">${esc(n)}</span>
+    <span class="fval">${esc(v)}</span></div>`).join('');
+  $('hex').innerHTML=hexRows(p.hex);
+}
+function renderConsole(){
+  $('evCnt').textContent=events.length;
+  if(!events.length){$('console').innerHTML='<div class="empty">No events.</div>';return;}
+  $('console').innerHTML=events.map(e=>`<div class="ev"><span class="lv ${e.level}">${e.level}</span>
+    <span class="msg">${esc(e.msg)}</span></div>`).join('');
+  $('console').scrollTop=$('console').scrollHeight;
+}
+
+function ingest(r){
+  results.push(r);stats.hosts++;
+  if(r.open_ports.length)stats.ics++;
+  r.services.forEach(s=>protoCounts[s.protocol]=(protoCounts[s.protocol]||0)+1);
+  r.findings.forEach(f=>{findings.push(f);if(f.severity!=='INFO')stats.find++;if(f.severity==='HIGH')stats.high++;});
+  r.packets.forEach(p=>{if(t0==null)t0=p.t;packets.push(p);});
+  (r.events||[]).forEach(e=>events.push(e));
+  renderStats();renderProtocols();renderFindings();renderHosts();renderPackets();renderConsole();
+}
+
+async function postJSON(path,body){
+  const res=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok)throw new Error(await res.text());return res.json();
+}
+async function run(){
+  const target=$('target').value.trim();
+  if(!target){$('status').textContent='Enter a target first (e.g. 192.168.1.0/24).';return;}
+  const gentle=$('gentle').checked;
+  $('runBtn').disabled=true;$('exportBtn').disabled=true;$('powerLamp').className='lamp med';
+  reset();
+  try{
+    const {hosts,error}=await postJSON('/api/targets',{target});
+    if(error){$('status').textContent=error;$('runBtn').disabled=false;$('powerLamp').className='lamp';return;}
+    if(!hosts.length){$('status').textContent='No valid hosts parsed.';$('runBtn').disabled=false;$('powerLamp').className='lamp';return;}
+    const total=hosts.length;let done=0;
+    for(const ip of hosts){
+      $('status').textContent=`Scanning ${ip}  (${done}/${total})`;
+      try{ingest(await postJSON('/api/scan_host',{ip,gentle}));}
+      catch(e){events.push({level:'error',msg:`${ip}: ${e.message}`});renderConsole();}
+      done++;$('sweep').style.width=(done/total*100).toFixed(1)+'%';
+    }
+    $('status').textContent=`Done. ${stats.ics} ICS device(s), ${stats.find} finding(s), ${packets.length} packet(s) across ${total} host(s).`;
+    $('powerLamp').className='lamp'+(stats.high?' high':'');
+    $('exportBtn').disabled=results.length===0;
+  }catch(e){$('status').textContent='Scan failed: '+e.message;$('powerLamp').className='lamp high';}
+  finally{$('runBtn').disabled=false;}
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify({generated:new Date().toISOString(),results},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ics_assessment.json';a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$('runBtn').addEventListener('click',run);
+$('exportBtn').addEventListener('click',exportJSON);
+$('target').addEventListener('keydown',e=>{if(e.key==='Enter')run();});
+
+// backend health check
+fetch('/health').then(r=>r.ok?r.json():Promise.reject()).then(()=>{$('powerLamp').className='lamp';})
+  .catch(()=>{$('offline').style.display='block';$('powerLamp').className='lamp off';});
+</script>
+</body>
+</html>
