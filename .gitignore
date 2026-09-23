@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.env
+.venv/
+venv/
+env/
+
+# Local output
+*.log
+scan-results*.json
+results*.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
